@@ -270,19 +270,48 @@ JavaTraceJsonReader >> ensureCreateInterfaceNamed: aString [
 
 { #category : 'instance creation' }
 JavaTraceJsonReader >> ensureCreateInterfaceOrClassNamed: aString withType: aType [
+	| baseName sequence packages classHierarchy packageContainer currentFullName currentContainer |
 
-	| sequence container name |
-	sequence := (aString removeSuffix: '[]') splitOn: $..
-	name := sequence last.
+	"1. Cleaning and separation package / classes"
+	baseName := aString removeSuffix: '[]'.
+	sequence := baseName splitOn: $..
+	
+	packages := sequence allButLast.
+	classHierarchy := sequence last splitOn: $$.
+	
+	"2. Creation of the root container (Package)"
+	packageContainer := self ensureCreatePackageFromStringCollection: packages.
+	
+	"Initializing the prefix to ensure a unique cache key"
+	currentFullName := packages isEmpty 
+		ifTrue: [ '' ] 
+		ifFalse: [ ('.' join: packages) , '.' ].
 
-	container := self ensureCreatePackageFromStringCollection:
-		             sequence allButLast.
-	^ createdTypes at: name ifAbsentPut: [
-		  model
-			  add: ((aType named: name)
-					   typeContainer: container;
-					   isStub: true;
-					   yourself) ]
+	"3. Strategic iteration: the target type is reserved for the terminal element"
+	currentContainer := packageContainer.
+	
+	classHierarchy withIndexDo: [ :className :index |
+		| targetType |
+		
+		"Construction of the fully qualified name to avoid collisions"
+		currentFullName := currentContainer = packageContainer
+			ifTrue: [ currentFullName , className ]
+			ifFalse: [ currentFullName , '$' , className ].
+		
+		"Type resolution: FamixJavaClass for intermediate containers, aType for the leaf"
+		self flag: 'We suppose here that all the intermediary types are just classes; this is wrong, but works as a temporary measure'.
+		targetType := index = classHierarchy size
+			ifTrue: [ aType ]
+			ifFalse: [ FamixJavaClass. 1halt].
+		
+		currentContainer := createdTypes at: currentFullName ifAbsentPut: [
+			model add: ((targetType named: className)
+				typeContainer: currentContainer;
+				isStub: true;
+				yourself) ]
+	].
+
+	^ currentContainer
 ]
 
 { #category : 'instance creation' }
