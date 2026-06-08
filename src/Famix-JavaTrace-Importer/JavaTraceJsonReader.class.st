@@ -270,48 +270,35 @@ JavaTraceJsonReader >> ensureCreateInterfaceNamed: aString [
 
 { #category : 'instance creation' }
 JavaTraceJsonReader >> ensureCreateInterfaceOrClassNamed: aString withType: aType [
-	| baseName sequence packages classHierarchy packageContainer currentFullName currentContainer |
 
-	"1. Cleaning and separation package / classes"
-	baseName := aString removeSuffix: '[]'.
-	sequence := baseName splitOn: $..
-	
-	packages := sequence allButLast.
-	classHierarchy := sequence last splitOn: $$.
-	
-	"2. Creation of the root container (Package)"
-	packageContainer := self ensureCreatePackageFromStringCollection: packages.
-	
-	"Initializing the prefix to ensure a unique cache key"
-	currentFullName := packages isEmpty 
-		ifTrue: [ '' ] 
-		ifFalse: [ ('.' join: packages) , '.' ].
+	| baseString packageSequence rawClassName container name lastDollarIndex |
+	"Strip array markers to normalize the base type string"
+	baseString := aString removeSuffix: '[]'.
 
-	"3. Strategic iteration: the target type is reserved for the terminal element"
-	currentContainer := packageContainer.
-	
-	classHierarchy withIndexDo: [ :className :index |
-		| targetType |
-		
-		"Construction of the fully qualified name to avoid collisions"
-		currentFullName := currentContainer = packageContainer
-			ifTrue: [ currentFullName , className ]
-			ifFalse: [ currentFullName , '$' , className ].
-		
-		"Type resolution: FamixJavaClass for intermediate containers, aType for the leaf"
-		self flag: 'We suppose here that all the intermediary types are just classes; this is wrong, but works as a temporary measure'.
-		targetType := index = classHierarchy size
-			ifTrue: [ aType ]
-			ifFalse: [ FamixJavaClass. 1halt].
-		
-		currentContainer := createdTypes at: currentFullName ifAbsentPut: [
-			model add: ((targetType named: className)
-				typeContainer: currentContainer;
-				isStub: true;
-				yourself) ]
-	].
+	"Fragment the string by package separators to isolate the raw class name"
+	packageSequence := baseString splitOn: $..
+	rawClassName := packageSequence last.
 
-	^ currentContainer
+	"Locate the last nesting delimiter to prevent destructive fragmentation"
+	lastDollarIndex := rawClassName lastIndexOf: $$.
+
+	"A dollar sign at index 0 (absent) or 1 (e.g., $Proxy0) categorically proves this is NOT a nesting separator."
+	lastDollarIndex <= 1
+		ifTrue: [
+				name := rawClassName.
+				container := self ensureCreatePackageFromStringCollection: packageSequence allButLast ]
+		ifFalse: [ "Valid inner type or anonymous class detected. Extract the strict short name"
+				name := rawClassName copyFrom: lastDollarIndex + 1 to: rawClassName size.
+
+				"Container is explicitly nullified. Inner types must be linked to their enclosing class, not a package"
+				container := nil ].
+
+	"Inject or retrieve from the registry, enforcing the configured container and stub status"
+	^ createdTypes at: name ifAbsentPut: [
+			  model add: ((aType named: name)
+					   typeContainer: container;
+					   isStub: true;
+					   yourself) ]
 ]
 
 { #category : 'instance creation' }
@@ -389,7 +376,7 @@ JavaTraceJsonReader >> ensureCreateType: aCollection [
 	isInterface := aCollection at: #isInterface ifAbsent: false.
 	name := aCollection at: #name.
 
-
+	"Choose the right type"
 	result := isInterface
 		          ifTrue: [
 				          isParametric
@@ -400,6 +387,7 @@ JavaTraceJsonReader >> ensureCreateType: aCollection [
 					          ifTrue: [ self ensureCreateParametricClassNamed: name ]
 					          ifFalse: [ self ensureCreateClassNamed: name ] ].
 
+	"If the class is an anonymous type, add its parent"
 	anonymousParentType := aCollection at: #anonymousParentType ifAbsent: nil.
 
 	anonymousParentType ifNotNil: [
@@ -417,8 +405,8 @@ JavaTraceJsonReader >> ensureCreateType: aCollection [
 							target: parentType;
 							mooseModel: model ] ].
 
-
-
+	"If the type is an Inner type, add its typecontainer differently"
+	aCollection at: #typeContainer ifPresent: [ :container | result typeContainer: (self ensureCreateType: container) ].
 
 	^ result
 ]
