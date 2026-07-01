@@ -7,7 +7,7 @@ This project can imports file created using [JavaTraceExtractor](https://github.
 ## Loading the project into Moose
 To load FamixCallStack into a Moose image, execute the following code:
 ```Smalltalk
-Metacello new githubUser: 'LeoDefossez' project: 'Famix-JavaTrace' commitish: 'master' path: 'src';
+Metacello new githubUser: 'moosetechnology' project: 'Famix-JavaTrace' commitish: 'master' path: 'src';
 	baseline: 'FamixJavaTrace';
 	load.
 ```
