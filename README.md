@@ -2,7 +2,7 @@
 
 This project offers a metamodel for Java traces, enabling dynamic analysis of Java applications directly within Moose.
 
-This project can imports file created using [JavaCallStackExtractor](https://github.com/moosetechnology/JavaCallStackExtractor/).
+This project can imports file created using [JavaTraceExtractor](https://github.com/moosetechnology/JavaTraceExtractor).
 
 ## Loading the project into Moose
 To load FamixCallStack into a Moose image, execute the following code:
